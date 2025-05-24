@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Puter AI Bridge</title>
+    <script src="https://js.puter.com/v2/"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .online {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .offline {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .logs {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background-color: #f8f9fa;
+            border: 1px solid #eaeaea;
+            border-radius: 3px;
+            padding: 10px;
+            overflow-x: auto;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .copy-btn {
+            background-color: #27ae60;
+            margin-left: 10px;
+        }
+        .copy-btn:hover {
+            background-color: #219653;
+        }
+        .configuration {
+            background-color: #e8f4fd;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Puter AI Bridge</h1>
+        <p>This web app serves as a bridge between your Telegram bot and Puter AI services.</p>
+        
+        <div id="status" class="offline">
+            <strong>Status:</strong> Not authenticated
+        </div>
+
+        <div id="auth-controls">
+            <button id="sign-in-btn">Sign in with Puter</button>
+        </div>
+
+        <div id="session-info" style="display: none;" class="configuration">
+            <h2>Bot Configuration</h2>
+            <p>Use these settings in your Telegram bot:</p>
+            
+            <div>
+                <strong>Bridge URL:</strong>
+                <code id="bridge-url"></code>
+                <button class="copy-btn" onclick="copyToClipboard('bridge-url')">Copy</button>
+            </div>
+            
+            <div style="margin-top: 15px;">
+                <strong>Session ID:</strong>
+                <code id="session-id"></code>
+                <button class="copy-btn" onclick="copyToClipboard('session-id')">Copy</button>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <p><strong>Quick Start Command:</strong></p>
+                <code id="quick-command"></code>
+                <button class="copy-btn" onclick="copyToClipboard('quick-command')">Copy</button>
+            </div>
+        </div>
+
+        <div id="api-docs" style="display: none;">
+            <h2>API Endpoints</h2>
+            <p>The following endpoints are available for your bot:</p>
+            
+            <h3>Authentication</h3>
+            <pre>POST /api/connect
+Content-Type: application/json
+
+{
+  "sessionId": "your-session-id"
+}</pre>
+
+            <h3>Chat with Puter AI</h3>
+            <pre>POST /api/chat
+Content-Type: application/json
+
+{
+  "prompt": "What is the capital of France?",
+  "sessionId": "your-session-id"
+}</pre>
+
+            <h3>Vision Analysis</h3>
+            <pre>POST /api/vision
+Content-Type: application/json
+
+{
+  "prompt": "Describe this image",
+  "imageURL": "https://example.com/image.jpg",
+  "sessionId": "your-session-id"
+}</pre>
+        </div>
+
+        <h2>Activity Logs</h2>
+        <div id="logs" class="logs"></div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status');
+        const authControlsEl = document.getElementById('auth-controls');
+        const sessionInfoEl = document.getElementById('session-info');
+        const apiDocsEl = document.getElementById('api-docs');
+        const logsEl = document.getElementById('logs');
+        const signInBtn = document.getElementById('sign-in-btn');
+        const bridgeUrlEl = document.getElementById('bridge-url');
+        const sessionIdEl = document.getElementById('session-id');
+        const quickCommandEl = document.getElementById('quick-command');
+
+        // Generate a unique session ID
+        const sessionId = Math.random().toString(36).substring(2, 15) + 
+                        Math.random().toString(36).substring(2, 15);
+        
+        // Store active sessions and their auth status
+        const activeSessions = {};
+
+        // Set current URL as bridge URL
+        const bridgeUrl = window.location.origin;
+        bridgeUrlEl.textContent = bridgeUrl;
+        sessionIdEl.textContent = sessionId;
+        quickCommandEl.textContent = `/connect_bridge ${bridgeUrl} ${sessionId}`;
+
+        // Function to add log entries
+        function addLog(message, isError = false) {
+            const logEntry = document.createElement('div');
+            logEntry.style.color = isError ? '#dc3545' : '#333';
+            const timestamp = new Date().toLocaleTimeString();
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logsEl.appendChild(logEntry);
+            logsEl.scrollTop = logsEl.scrollHeight;
+        }
+
+        // Copy to clipboard function
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            const text = element.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                addLog(`Copied ${elementId.replace('-', ' ')} to clipboard`);
+            }).catch(err => {
+                addLog(`Failed to copy: ${err}`, true);
+            });
+        }
+
+        // Check if user is already signed in
+        async function checkAuthStatus() {
+            try {
+                const user = await puter.auth.getUser();
+                if (user) {
+                    showAuthenticatedState(user);
+                    setupSessionHandler();
+                    return true;
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
+            }
+            return false;
+        }
+
+        // Show authenticated state UI
+        function showAuthenticatedState(user) {
+            statusEl.className = 'online';
+            statusEl.innerHTML = `<strong>Status:</strong> Authenticated as ${user.username || 'User'}`;
+            authControlsEl.innerHTML = `<button id="sign-out-btn">Sign Out</button>`;
+            document.getElementById('sign-out-btn').addEventListener('click', signOut);
+            sessionInfoEl.style.display = 'block';
+            apiDocsEl.style.display = 'block';
+            addLog('Successfully authenticated with Puter');
+            
+            // Register this session
+            activeSessions[sessionId] = { authenticated: true };
+        }
+
+        // Sign in with Puter
+        async function signIn() {
+            try {
+                addLog('Attempting to sign in...');
+                const user = await puter.auth.signIn();
+                showAuthenticatedState(user);
+                setupSessionHandler();
+            } catch (error) {
+                addLog(`Authentication failed: ${error.message}`, true);
+            }
+        }
+
+        // Sign out
+        async function signOut() {
+            try {
+                await puter.auth.signOut();
+                statusEl.className = 'offline';
+                statusEl.innerHTML = '<strong>Status:</strong> Not authenticated';
+                authControlsEl.innerHTML = '<button id="sign-in-btn">Sign in with Puter</button>';
+                document.getElementById('sign-in-btn').addEventListener('click', signIn);
+                sessionInfoEl.style.display = 'none';
+                apiDocsEl.style.display = 'none';
+                addLog('Signed out');
+                
+                // Mark session as not authenticated
+                if (activeSessions[sessionId]) {
+                    activeSessions[sessionId].authenticated = false;
+                }
+            } catch (error) {
+                addLog(`Sign out failed: ${error.message}`, true);
+            }
+        }
+
+        // Setup the session handler for API requests
+        function setupSessionHandler() {
+            addLog('Setting up API handlers...');
+            
+            // Add event listener for API requests
+            window.addEventListener('message', async (event) => {
+                if (event.origin !== window.location.origin) return;
+                
+                const { type, requestId, endpoint, data } = event.data || {};
+                
+                if (type === 'api-request') {
+                    handleApiRequest(requestId, endpoint, data);
+                }
+            });
+            
+            // Also listen for fetch requests via Vercel serverless functions
+            addLog('API endpoints ready');
+        }
+
+        // Handle API requests
+        async function handleApiRequest(requestId, endpoint, data) {
+            try {
+                const sid = data.sessionId || sessionId;
+                
+                // Check if this session is authenticated
+                if (!activeSessions[sid] || !activeSessions[sid].authenticated) {
+                    throw new Error('Session not authenticated or invalid');
+                }
+                
+                let response;
+                
+                switch (endpoint) {
+                    case 'chat':
+                        addLog(`Chat request: ${data.prompt.substring(0, 50)}${data.prompt.length > 50 ? '...' : ''}`);
+                        response = await puter.ai.chat(data.prompt, data.options || {});
+                        break;
+                        
+                    case 'vision':
+                        addLog(`Vision request: ${data.prompt} (analyzing image)`);
+                        response = await puter.ai.chat(data.prompt, data.imageURL);
+                        break;
+                        
+                    default:
+                        throw new Error(`Unknown endpoint: ${endpoint}`);
+                }
+                
+                // Send response
+                window.parent.postMessage({
+                    type: 'api-response',
+                    requestId,
+                    data: response
+                }, '*');
+                
+                addLog(`${endpoint} response sent`);
+                
+            } catch (error) {
+                addLog(`API error: ${error.message}`, true);
+                
+                window.parent.postMessage({
+                    type: 'api-error',
+                    requestId,
+                    error: error.message
+                }, '*');
+            }
+        }
+
+        // API endpoint for chat
+        async function handleChatRequest(req, res) {
+            try {
+                const { prompt, options, sessionId: sid } = req.body;
+                const sessionToUse = sid || sessionId;
+                
+                if (!activeSessions[sessionToUse] || !activeSessions[sessionToUse].authenticated) {
+                    return res.status(401).json({ error: 'Session not authenticated or invalid' });
+                }
+                
+                addLog(`Chat request: ${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}`);
+                const response = await puter.ai.chat(prompt, options || {});
+                res.json(response);
+                addLog('Chat response sent');
+                
+            } catch (error) {
+                addLog(`Chat error: ${error.message}`, true);
+                res.status(500).json({ error: error.message });
+            }
+        }
+
+        // API endpoint for vision
+        async function handleVisionRequest(req, res) {
+            try {
+                const { prompt, imageURL, sessionId: sid } = req.body;
+                const sessionToUse = sid || sessionId;
+                
+                if (!activeSessions[sessionToUse] || !activeSessions[sessionToUse].authenticated) {
+                    return res.status(401).json({ error: 'Session not authenticated or invalid' });
+                }
+                
+                addLog(`Vision request: ${prompt} (analyzing image)`);
+                const response = await puter.ai.chat(prompt, imageURL);
+                res.json(response);
+                addLog('Vision response sent');
+                
+            } catch (error) {
+                addLog(`Vision error: ${error.message}`, true);
+                res.status(500).json({ error: error.message });
+            }
+        }
+
+        // Event listeners
+        signInBtn.addEventListener('click', signIn);
+
+        // Expose API functions for the Vercel serverless functions
+        window.puterBridge = {
+            handleChatRequest,
+            handleVisionRequest,
+            isSessionValid: (sid) => {
+                return activeSessions[sid || sessionId]?.authenticated === true;
+            },
+            activeSessions
+        };
+
+        // Check authentication status on load
+        checkAuthStatus();
+    </script>
+</body>
+</html>

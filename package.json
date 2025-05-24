@@ -1,0 +1,17 @@
+{
+  "name": "puter-ai-bridge-vercel",
+  "version": "1.0.0",
+  "description": "Simple Puter AI bridge optimized for Vercel deployment with Telegram bot integration",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "next": "^13.4.3"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
